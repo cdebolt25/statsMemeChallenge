@@ -88,98 +88,172 @@ This exercise is fundamentally about **walking AI through a process** to create 
 **Important:** When you create your final `index.qmd` file, use `echo: false` for all code chunks that generate the meme. The rendered HTML should show only the meme image and your explanation, not the code. The code should still be in the `.qmd` file (so it can be rendered), but it won't be displayed in the HTML output.
 :::
 
-### Step 1: Load Your Images
+## Original and Stippled Images
 
-::: {.panel-tabset}
+**Original Image:**
 
-### Python
+![Original Florida beach image before stippling.](florida_beach_picture.jpg){width=60%}
+
+**Final Stippled Image:**
+
+The completed blue noise stippling of your image:
+
+![Final blue noise stippling of the Florida beach image. This stippled version preserves the visual information of the original image using approximately 13,885 carefully placed dots.](stippled_image.png)
+
+## Progressive Stippling Animation
+
+![Progressive stippling animation showing the sequential build-up of points. Each frame represents an increment of 100 points, demonstrating how the blue noise stippling pattern develops as more points are added.](progressive_stippling.gif)
+
+## Creating the Four-Panel Statistics Meme
+
+The following code generates the complete four-panel meme demonstrating selection bias:
 
 ```{python}
-#| label: load-images
-#| echo: true
-#| eval: false
+#| label: create-meme
+#| echo: false
+#| fig-width: 16
+#| fig-height: 4
+#| dpi: 200
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
+import platform
 
-# Load original image
-original_img = Image.open('your_image.jpg')
+# Step 1: Load original image
+original_img = Image.open('florida_beach_picture.jpg')
 if original_img.mode != 'L':
     original_img = original_img.convert('L')
 original_array = np.array(original_img, dtype=np.float32) / 255.0
+height, width = original_array.shape
 
-# Load stippled image (from Part 1 - see https://flyaflya.github.io/stippleChallenge/)
-stipple_array = np.load('stippleImage.npy')
+# Step 2: Load stippled image
+stippled_img = Image.open('stippled_image.png')
+if stippled_img.mode != 'L':
+    stippled_img = stippled_img.convert('L')
+stipple_array = np.array(stippled_img, dtype=np.float32) / 255.0
 
-print(f"Original: {original_array.shape}, Stipple: {stipple_array.shape}")
+# Ensure stippled image matches original dimensions
+if stipple_array.shape != original_array.shape:
+    stippled_img = stippled_img.resize((width, height), Image.Resampling.LANCZOS)
+    stipple_array = np.array(stippled_img, dtype=np.float32) / 255.0
+
+# Step 3: Create the bold letter "S" matrix
+# Create white background
+s_image = Image.new('L', (width, height), color=255)
+draw = ImageDraw.Draw(s_image)
+
+# Try to use a bold font, fallback to default if not available
+font_size = int(height * 0.85)
+font = None
+
+# Try to load a bold font - attempt common system fonts
+system = platform.system()
+
+if system == "Windows":
+    font_paths = [
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/Arial Bold.ttf",
+        "arial.ttf"
+    ]
+elif system == "Darwin":  # macOS
+    font_paths = [
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf"
+    ]
+else:  # Linux
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/arial.ttf"
+    ]
+
+for font_path in font_paths:
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+        break
+    except:
+        continue
+
+# If no font found, use default font
+if font is None:
+    font = ImageFont.load_default()
+
+# Calculate text position to center the "S"
+text = "S"
+bbox = draw.textbbox((0, 0), text, font=font)
+text_width = bbox[2] - bbox[0]
+text_height = bbox[3] - bbox[1]
+x = (width - text_width) // 2
+y = (height - text_height) // 2
+
+# Draw the "S" in black
+draw.text((x, y), text, fill=0, font=font)
+
+# Convert to array and normalize (0.0 = black, 1.0 = white)
+s_array = np.array(s_image, dtype=np.float32) / 255.0
+
+# Step 4: Create the masked estimate
+# Create binary mask: where S is black (value < 0.5), that's the mask
+threshold = 0.5
+mask = s_array < threshold
+
+# Apply mask: where S is black, remove stipples (set to white)
+masked_estimate = stipple_array.copy()
+masked_estimate[mask] = 1.0  # Set masked areas to white
+
+# Step 5: Assemble the four-panel meme
+fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+fig.patch.set_facecolor('#FFE5E5')  # Light pink background
+
+# Panel 1: Reality (Original Image)
+axes[0].imshow(original_array, cmap='gray', vmin=0, vmax=1)
+axes[0].set_title('Reality', fontsize=14, fontweight='bold', pad=10)
+axes[0].axis('off')
+
+# Panel 2: Your Model (Stippled Image)
+axes[1].imshow(stipple_array, cmap='gray', vmin=0, vmax=1)
+axes[1].set_title('Your Model', fontsize=14, fontweight='bold', pad=10)
+axes[1].axis('off')
+
+# Panel 3: Selection Bias (Letter S)
+axes[2].imshow(s_array, cmap='gray', vmin=0, vmax=1)
+axes[2].set_title('Selection Bias', fontsize=14, fontweight='bold', pad=10)
+axes[2].axis('off')
+
+# Panel 4: Estimate (Masked Stippled Image)
+axes[3].imshow(masked_estimate, cmap='gray', vmin=0, vmax=1)
+axes[3].set_title('Estimate', fontsize=14, fontweight='bold', pad=10)
+axes[3].axis('off')
+
+plt.tight_layout(pad=0.5)
+plt.savefig('selection_bias_meme.png', dpi=200, bbox_inches='tight', facecolor='#FFE5E5')
+plt.show()
 ```
 
-### R
+## The Four-Panel Statistics Meme
 
-```{r}
-#| label: load-images-r
-#| echo: true
-#| eval: false
+![Four-panel statistics meme demonstrating selection bias: Reality (original beach image), Your Model (stippled version), Selection Bias (bold letter S), and Estimate (masked stippled image showing missing data in S pattern)](selection_bias_meme.png)
 
-library(imager)
+## Understanding Selection Bias Through This Visualization
 
-# Load original image
-original_img <- load.image('your_image.jpg')
-if(dim(original_img)[3] == 3) {
-  original_img <- grayscale(original_img)
-}
-# Convert to matrix [h, w] and normalize
-arr <- as.array(original_img)
-original_array <- t(arr[,,1,1]) / max(arr)
+Selection bias is a fundamental problem in statistics and data science that occurs when the data we observe is not representative of the population we want to study. This four-panel meme provides a powerful visual metaphor for understanding this concept:
 
-# Load stippled image (from Part 1 - see https://flyaflya.github.io/stippleChallenge/)
-# Adjust based on how you saved it - could be .RData, .rds, or regenerate
-# stipple_array <- readRDS('stippleImage.rds')
+1. **Reality** (Panel 1): The original image represents the true population—the complete, unbiased reality we want to understand. Every pixel contains information about the full picture.
 
-cat("Original dimensions:", dim(original_array), "\n")
-```
+2. **Your Model** (Panel 2): The stippled image represents our data collection method. We've sampled the population using blue noise stippling, creating a representation that preserves the essential visual information through carefully placed data points (black dots). This is our "model" of reality—it's not perfect, but it captures the key features.
 
-:::
+3. **Selection Bias** (Panel 3): The bold letter "S" represents a systematic pattern of missing data. In real-world scenarios, selection bias might occur because:
+   - Certain groups are systematically excluded from surveys
+   - Data collection methods miss specific regions or demographics
+   - Response rates vary systematically across populations
+   - Sampling frames are incomplete or biased
 
-### Step 2: Create the Block Letter "S"
+4. **Estimate** (Panel 4): When we apply the selection bias pattern to our model, we see the biased estimate. Notice how the "S" shape creates a systematic gap in our data—we're missing information in a non-random pattern. This biased sample no longer accurately represents the original population, leading to incorrect conclusions.
 
-Create a matrix matching your image dimensions with a bold letter "S" rendered as black pixels on a white background.
+**The Key Insight:** Just as the "S" pattern distorts our view of the beach scene, selection bias distorts our understanding of populations in real data analysis. The missing data isn't random—it follows a systematic pattern that can lead us to draw incorrect conclusions about the population of interest.
 
-**Hints:**
-
-- Use image drawing libraries to render text (PIL/Pillow in Python, `magick` in R)
-- Create a white background matrix matching your image dimensions (height × width)
-- Render a bold letter "S" centered in the image (try 80-90% of image height for font size)
-- Convert the result to a matrix with values in [0, 1] range (0.0 = black, 1.0 = white)
-- The "S" should be clearly visible and fill most of the image space
-
-### Step 3: Create the Masked Estimate
-
-Your stippled image is a matrix where black dots (0.0) represent data points and white (1.0) is background. The "S" matrix shows where selection bias occurs (black "S" = missing data). To create the masked estimate, remove stipple points (set to white) wherever the "S" is black.
-
-**Hints:**
-
-- Create a binary mask by thresholding the "S" image (e.g., pixels < 0.5 are part of the "S")
-- Apply the mask to your stippled image: where the "S" is black, set those pixels to white (1.0)
-- Where the "S" is white, keep the original stipple values
-- This creates the visual effect of "missing data" in the shape of the "S"
-- Use conditional assignment or boolean masking (e.g., `np.where()` in Python, `ifelse()` in R)
-
-### Step 4: Assemble the Four-Panel Meme
-
-Use the image composition capabilities of matplotlib (Python) or imager (R) to arrange your four matrices as panels in a single figure.
-
-**Hints:**
-
-- Create a multi-panel layout (1×4 for horizontal, 2×2 for grid)
-- Display each matrix as a grayscale image: original, stippled, "S", and masked stippled
-- Add clear labels: "Reality", "Your Model", "Selection Bias", "Estimate"
-- Use minimal spacing between panels for a clean, professional look
-- Consider a light background color (like pink) to make panels stand out
-- Save with high DPI (150-300) for quality output
-- In Python: use `plt.subplots()` and `imshow()` for each panel
-- In R: use `par(mfrow = ...)` and `plot()` with imager's `as.cimg()` to convert matrices
+**Real-World Applications:** This visualization helps us remember to always ask: **"Does my sample match my population of interest?"** Whether analyzing survey data, clinical trials, or business metrics, selection bias can silently undermine our conclusions. By recognizing systematic patterns of missing data, we can take steps to correct for bias or acknowledge the limitations of our analysis.
 
 ## Tips for Success
 
